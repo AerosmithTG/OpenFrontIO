@@ -46,7 +46,7 @@ export class HostLobbyModal extends LitElement {
             @click=${this.copyToClipboard}
             ?disabled=${this.copySuccess}
           >
-            <span class="lobby-id">${this.lobbyId}</span>
+            <span class="lobby-id" style="font-family: 'Consolas', monospace;">${this.lobbyId}</span>
             ${
               this.copySuccess
                 ? html`<span class="copy-success-icon">✓</span>`

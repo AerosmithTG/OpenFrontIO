@@ -7,24 +7,45 @@
 
 set -e  # Exit immediately if a command exits with a non-zero status
 
+# Initialize variables
+ENABLE_BASIC_AUTH=false
+
+# Parse command line arguments
+POSITIONAL_ARGS=()
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --enable_basic_auth)
+      ENABLE_BASIC_AUTH=true
+      shift
+      ;;
+    *)
+      POSITIONAL_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+
+# Restore positional parameters
+set -- "${POSITIONAL_ARGS[@]}"
+
 # Check command line arguments
 if [ $# -lt 2 ] || [ $# -gt 3 ]; then
     echo "Error: Please specify environment and host, with optional subdomain"
-    echo "Usage: $0 [prod|staging] [eu|us|staging] [subdomain]"
+    echo "Usage: $0 [prod|staging] [eu|us|staging|masters] [subdomain] [--enable_basic_auth]"
     exit 1
 fi
 
 # Validate first argument (environment)
 if [ "$1" != "prod" ] && [ "$1" != "staging" ]; then
     echo "Error: First argument must be either 'prod' or 'staging'"
-    echo "Usage: $0 [prod|staging] [eu|us|staging] [subdomain]"
+    echo "Usage: $0 [prod|staging] [eu|us|staging|masters] [subdomain] [--enable_basic_auth]"
     exit 1
 fi
 
 # Validate second argument (host)
-if [ "$2" != "eu" ] && [ "$2" != "us" ] && [ "$2" != "staging" ]; then
-    echo "Error: Second argument must be either 'eu', 'us', or 'staging'"
-    echo "Usage: $0 [prod|staging] [eu|us|staging] [subdomain]"
+if [ "$2" != "eu" ] && [ "$2" != "us" ] && [ "$2" != "staging" ] && [ "$2" != "masters" ]; then
+    echo "Error: Second argument must be either 'eu', 'us', 'staging', or 'masters'"
+    echo "Usage: $0 [prod|staging] [eu|us|staging|masters] [subdomain] [--enable_basic_auth]"
     exit 1
 fi
 
@@ -65,6 +86,9 @@ if [ "$HOST" == "staging" ]; then
 elif [ "$HOST" == "us" ]; then
     print_header "DEPLOYING TO US HOST"
     SERVER_HOST=$SERVER_HOST_US
+elif [ "$HOST" == "masters" ]; then
+    print_header "DEPLOYING TO MASTERS HOST"
+    SERVER_HOST=$SERVER_HOST_MASTERS
 else
     print_header "DEPLOYING TO EU HOST"
     SERVER_HOST=$SERVER_HOST_EU
@@ -74,6 +98,21 @@ fi
 if [ -z "$SERVER_HOST" ]; then
     echo "Error: ${HOST} not defined in .env file or environment"
     exit 1
+fi
+
+# Check if basic auth is enabled and credentials are available
+if [ "$ENABLE_BASIC_AUTH" = true ]; then
+    print_header "BASIC AUTH ENABLED"
+    if [ -z "$BASIC_AUTH_USER" ] || [ -z "$BASIC_AUTH_PASS" ]; then
+        echo "Error: Basic Auth is enabled but BASIC_AUTH_USER or BASIC_AUTH_PASS not defined in .env file or environment"
+        exit 1
+    fi
+    echo "Basic Authentication will be enabled with user: $BASIC_AUTH_USER"
+else
+    # If basic auth is not enabled, set the variables to empty to ensure they don't get used
+    BASIC_AUTH_USER=""
+    BASIC_AUTH_PASS=""
+    echo "Basic Authentication is disabled"
 fi
 
 # Configuration
@@ -147,8 +186,11 @@ R2_BUCKET=$R2_BUCKET
 CF_API_TOKEN=$CF_API_TOKEN
 DOMAIN=$DOMAIN
 SUBDOMAIN=$SUBDOMAIN
-MON_USERNAME=$MON_USERNAME
-MON_PASSWORD=$MON_PASSWORD
+OTEL_USERNAME=$OTEL_USERNAME
+OTEL_PASSWORD=$OTEL_PASSWORD
+OTEL_ENDPOINT=$OTEL_ENDPOINT
+BASIC_AUTH_USER=$BASIC_AUTH_USER
+BASIC_AUTH_PASS=$BASIC_AUTH_PASS
 EOL
 chmod 600 $REMOTE_UPDATE_PATH/.env && \
 $REMOTE_UPDATE_SCRIPT"
@@ -160,5 +202,8 @@ fi
 
 print_header "DEPLOYMENT COMPLETED SUCCESSFULLY"
 echo "✅ New version deployed to ${ENV} environment in ${HOST} with subdomain ${SUBDOMAIN}!"
+if [ "$ENABLE_BASIC_AUTH" = true ]; then
+    echo "🔒 Basic authentication enabled with user: $BASIC_AUTH_USER"
+fi
 echo "🌐 Check your server to verify the deployment."
 echo "======================================================="
